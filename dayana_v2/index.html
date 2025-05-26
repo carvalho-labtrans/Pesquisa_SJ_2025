@@ -17,7 +17,7 @@
             padding: 0;
             margin: 0;
         }
-        /* Estilo para o botão de GPS */
+        /* Estilos para o controle de GPS */
         .leaflet-control-gps {
             background: white;
             padding: 5px 10px;
@@ -28,7 +28,6 @@
         .leaflet-control-gps.active {
             background: #4CAF50;
         }
-        /* Estilo para o marcador de GPS */
         .gps-icon {
             background: red;
             border-radius: 50%;
@@ -58,7 +57,7 @@
         <script>
         var map = L.map('map', {
             zoomControl:false, maxZoom:28, minZoom:1
-        }).fitBounds([[-27.5996876459164,-48.663931818753596],[-27.548712503284843,-48.577478756584966]]);
+        }).fitBounds([[-27.592906452218074,-48.6350369381147],[-27.56267834664409,-48.58287083017206]]);
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
@@ -384,6 +383,16 @@
 
         /* ========== CÓDIGO DE RASTREAMENTO GPS ADICIONADO ========== */
         document.addEventListener('DOMContentLoaded', function() {
+            // Verifica se é HTTPS ou localhost
+            const isSecure = window.location.protocol === 'https:' || 
+                            window.location.hostname === 'localhost' || 
+                            window.location.hostname === '127.0.0.1';
+            
+            if (!isSecure) {
+                console.warn("⚠️ Ative um servidor local (ex: Live Server) ou use HTTPS (GitHub Pages) para o GPS funcionar.");
+                return;
+            }
+
             if (navigator.geolocation) {
                 let gpsMarker;
                 let watchId;
@@ -410,7 +419,7 @@
                                 button.classList.add('active');
                                 watchId = navigator.geolocation.watchPosition(
                                     (position) => {
-                                        const { latitude, longitude } = position.coords;
+                                        const { latitude, longitude, accuracy } = position.coords;
                                         if (gpsMarker) map.removeLayer(gpsMarker);
                                         
                                         // Cria marcador vermelho
@@ -421,14 +430,14 @@
                                                 iconSize: [12, 12]
                                             })
                                         }).addTo(map)
-                                        .bindPopup("Você está aqui!<br>Precisão: " + position.coords.accuracy.toFixed(1) + " metros");
+                                        .bindPopup(`Sua posição (Precisão: ${accuracy.toFixed(1)}m)`);
                                         
                                         // Centraliza o mapa na posição
                                         map.setView([latitude, longitude], 18);
                                     },
                                     (error) => {
                                         console.error("Erro no GPS:", error);
-                                        alert("Erro ao acessar GPS: " + error.message);
+                                        alert(`Erro: ${error.message}`);
                                     },
                                     { 
                                         enableHighAccuracy: true,
@@ -446,7 +455,7 @@
                 // Adiciona o controle ao mapa
                 new GpsControl({ position: 'topleft' }).addTo(map);
             } else {
-                console.warn("GPS não suportado neste navegador");
+                alert("Seu navegador não suporta GPS!");
             }
         });
         /* ========== FIM DO CÓDIGO ADICIONADO ========== */
