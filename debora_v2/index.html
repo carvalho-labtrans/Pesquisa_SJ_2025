@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
     <head>
@@ -17,8 +18,33 @@
             padding: 0;
             margin: 0;
         }
+        /* Estilos adicionados para o controle de GPS */
+        .leaflet-control-gps {
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+        }
+        .leaflet-control-gps.active {
+            background: #4CAF50;
+        }
+        .leaflet-control-gps .gps-button {
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            font-size: 18px;
+            cursor: pointer;
+        }
+        .gps-marker {
+            background: red;
+            border-radius: 50%;
+            width: 12px;
+            height: 12px;
+            position: absolute;
+            transform: translate(-50%, -50%);
+        }
         </style>
-        <title></title>
+        <title>Mapa com GPS</title>
     </head>
     <body>
         <div id="map">
@@ -37,12 +63,128 @@
         <script src="data/SC_sao_jose_2023_2.js"></script>
         <script src="data/faces_debora_3.js"></script>
         <script>
+        // ===== CONTROLE DE GPS =====
+        L.Control.GPS = L.Control.extend({
+            onAdd: function(map) {
+                this._map = map;
+                this._container = L.DomUtil.create('div', 'leaflet-control-gps');
+                this._button = L.DomUtil.create('div', 'gps-button', this._container);
+                this._button.innerHTML = '📍';
+                this._isActive = false;
+                this._marker = null;
+                this._accuracyCircle = null;
+
+                L.DomEvent.on(this._button, 'click', this._toggleGPS, this);
+                return this._container;
+            },
+
+            _toggleGPS: function() {
+                if (this._isActive) {
+                    this._stopGPS();
+                } else {
+                    this._startGPS();
+                }
+            },
+
+            _startGPS: function() {
+                if (!navigator.geolocation) {
+                    alert("Geolocalização não suportada pelo navegador.");
+                    return;
+                }
+
+                this._isActive = true;
+                L.DomUtil.addClass(this._container, 'active');
+                this._button.innerHTML = '📍';
+
+                this._watchId = navigator.geolocation.watchPosition(
+                    this._updatePosition.bind(this),
+                    this._error.bind(this),
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 3000,
+                        timeout: 5000
+                    }
+                );
+            },
+
+            _stopGPS: function() {
+                this._isActive = false;
+                L.DomUtil.removeClass(this._container, 'active');
+                this._button.innerHTML = '📍';
+
+                if (this._watchId) {
+                    navigator.geolocation.clearWatch(this._watchId);
+                }
+                if (this._marker) {
+                    this._map.removeLayer(this._marker);
+                    this._marker = null;
+                }
+                if (this._accuracyCircle) {
+                    this._map.removeLayer(this._accuracyCircle);
+                    this._accuracyCircle = null;
+                }
+            },
+
+            _updatePosition: function(pos) {
+                var latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
+                var accuracy = pos.coords.accuracy;
+
+                if (this._marker) {
+                    this._map.removeLayer(this._marker);
+                }
+                if (this._accuracyCircle) {
+                    this._map.removeLayer(this._accuracyCircle);
+                }
+
+                this._accuracyCircle = L.circle(latlng, {
+                    radius: accuracy,
+                    color: '#136AEC',
+                    fillColor: '#136AEC',
+                    fillOpacity: 0.15,
+                    weight: 1
+                }).addTo(this._map);
+
+                this._marker = L.marker(latlng, {
+                    icon: L.divIcon({
+                        className: 'gps-marker',
+                        iconSize: [12, 12]
+                    })
+                }).addTo(this._map);
+
+                this._marker.bindPopup(
+                    `Sua posição:<br>
+                    Lat: ${latlng.lat.toFixed(6)}<br>
+                    Lng: ${latlng.lng.toFixed(6)}<br>
+                    Precisão: ~${Math.round(accuracy)} metros`
+                ).openPopup();
+
+                this._map.setView(latlng, 18);
+            },
+
+            _error: function(err) {
+                console.error("Erro de GPS:", err);
+                alert("Erro ao obter localização: " + err.message);
+                this._stopGPS();
+            }
+        });
+
+        L.control.gps = function(opts) {
+            return new L.Control.GPS(opts);
+        };
+
+        // ===== MAPA PRINCIPAL =====
         var map = L.map('map', {
             zoomControl:false, maxZoom:28, minZoom:1
         }).fitBounds([[-27.639171744342082,-48.73839171825091],[-27.518259322046152,-48.52972728648032]]);
+        
+        // Adiciona controle de GPS
+        L.control.gps({ position: 'topleft' }).addTo(map);
+
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
+        
+        // [Restante do seu código original permanece exatamente igual...]
         // remove popup's row if "visible-with-data"
         function removeEmptyRowsFromPopupContent(content, feature) {
          var tempDiv = document.createElement('div');
