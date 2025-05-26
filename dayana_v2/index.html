@@ -17,6 +17,25 @@
             padding: 0;
             margin: 0;
         }
+        /* Estilo para o botão de GPS */
+        .leaflet-control-gps {
+            background: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            cursor: pointer;
+        }
+        .leaflet-control-gps.active {
+            background: #4CAF50;
+        }
+        /* Estilo para o marcador de GPS */
+        .gps-icon {
+            background: red;
+            border-radius: 50%;
+            width: 12px !important;
+            height: 12px !important;
+            margin: -6px 0 0 -6px !important;
+        }
         </style>
         <title></title>
     </head>
@@ -39,7 +58,7 @@
         <script>
         var map = L.map('map', {
             zoomControl:false, maxZoom:28, minZoom:1
-        }).fitBounds([[-27.592906452218074,-48.6350369381147],[-27.56267834664409,-48.58287083017206]]);
+        }).fitBounds([[-27.5996876459164,-48.663931818753596],[-27.548712503284843,-48.577478756584966]]);
         var hash = new L.Hash(map);
         map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
@@ -362,6 +381,75 @@
         map.on("layerremove", function(){
             resetLabels([layer_SC_sao_jose_2023_2,layer_faces_dayana_3]);
         });
+
+        /* ========== CÓDIGO DE RASTREAMENTO GPS ADICIONADO ========== */
+        document.addEventListener('DOMContentLoaded', function() {
+            if (navigator.geolocation) {
+                let gpsMarker;
+                let watchId;
+
+                // Cria botão de controle do GPS
+                const GpsControl = L.Control.extend({
+                    onAdd: function(map) {
+                        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+                        const button = L.DomUtil.create('a', 'leaflet-control-gps', container);
+                        button.innerHTML = '📍';
+                        button.title = 'Ativar/Desativar GPS';
+                        button.style.fontSize = '20px';
+                        button.style.cursor = 'pointer';
+
+                        L.DomEvent.on(button, 'click', function() {
+                            if (watchId) {
+                                // Desativa o GPS
+                                navigator.geolocation.clearWatch(watchId);
+                                if (gpsMarker) map.removeLayer(gpsMarker);
+                                watchId = null;
+                                button.classList.remove('active');
+                            } else {
+                                // Ativa o GPS
+                                button.classList.add('active');
+                                watchId = navigator.geolocation.watchPosition(
+                                    (position) => {
+                                        const { latitude, longitude } = position.coords;
+                                        if (gpsMarker) map.removeLayer(gpsMarker);
+                                        
+                                        // Cria marcador vermelho
+                                        gpsMarker = L.marker([latitude, longitude], {
+                                            icon: L.divIcon({
+                                                className: 'gps-icon',
+                                                html: '⬤',
+                                                iconSize: [12, 12]
+                                            })
+                                        }).addTo(map)
+                                        .bindPopup("Você está aqui!<br>Precisão: " + position.coords.accuracy.toFixed(1) + " metros");
+                                        
+                                        // Centraliza o mapa na posição
+                                        map.setView([latitude, longitude], 18);
+                                    },
+                                    (error) => {
+                                        console.error("Erro no GPS:", error);
+                                        alert("Erro ao acessar GPS: " + error.message);
+                                    },
+                                    { 
+                                        enableHighAccuracy: true,
+                                        maximumAge: 3000,
+                                        timeout: 10000
+                                    }
+                                );
+                            }
+                        });
+
+                        return container;
+                    }
+                });
+
+                // Adiciona o controle ao mapa
+                new GpsControl({ position: 'topleft' }).addTo(map);
+            } else {
+                console.warn("GPS não suportado neste navegador");
+            }
+        });
+        /* ========== FIM DO CÓDIGO ADICIONADO ========== */
         </script>
     </body>
 </html>
