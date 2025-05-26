@@ -18,47 +18,34 @@
         margin: 0;
         overflow: hidden;
     }
-    /* Estilos do Controle GPS */
-    .leaflet-control-gps {
+    .gps-button {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        z-index: 1000;
         background: white;
-        border-radius: 5px;
-        box-shadow: 0 1px 5px rgba(0,0,0,0.4);
-        padding: 5px;
-    }
-    .leaflet-control-gps.active {
-        background: #4CAF50;
-    }
-    .leaflet-control-gps .gps-button {
-        width: 30px;
-        height: 30px;
-        display: block;
-        text-align: center;
-        line-height: 30px;
-        font-size: 18px;
-        color: #333;
+        border: 1px solid #888;
+        border-radius: 4px;
+        padding: 8px 12px;
         cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
     }
-    .leaflet-control-gps.active .gps-button {
+    .gps-button.active {
+        background: #4caf50;
         color: white;
-    }
-    .gps-marker {
-        background: red;
-        border-radius: 50%;
-        width: 12px;
-        height: 12px;
-    }
-    .gps-accuracy {
-        fill: none;
-        stroke: #136AEC;
-        stroke-opacity: 0.5;
-        stroke-width: 2px;
     }
     </style>
     <title>Mapa com Rastreamento GPS</title>
 </head>
 <body>
     <div id="map"></div>
-
+    <button id="gpsBtn" class="gps-button" title="Ativar/desativar localização">
+        <i class="fas fa-location-arrow"></i> GPS
+    </button>
     <script src="js/qgis2web_expressions.js"></script>
     <script src="js/leaflet.js"></script>
     <script src="js/L.Control.Layers.Tree.min.js"></script>
@@ -69,168 +56,17 @@
     <script src="js/rbush.min.js"></script>
     <script src="js/labelgun.min.js"></script>
     <script src="js/labels.js"></script>
+    <script src="js/fontawesome-all.min.js"></script>
     <script src="data/mascara_0.js"></script>
     <script src="data/SC_sao_jose_2023_2.js"></script>
     <script src="data/faces_debora_3.js"></script>
-
     <script>
-    // ===== CONTROLE DE GPS =====
-    L.Control.GPS = L.Control.extend({
-        options: {
-            position: 'topleft',
-            title: 'Ativar/Desativar GPS'
-        },
-
-        onAdd: function(map) {
-            this._map = map;
-            this._container = L.DomUtil.create('div', 'leaflet-control-gps');
-            this._button = L.DomUtil.create('a', 'gps-button', this._container);
-            this._button.innerHTML = '📍';
-            this._button.href = '#';
-            this._button.title = this.options.title;
-
-            L.DomEvent
-                .on(this._button, 'click', L.DomEvent.stopPropagation)
-                .on(this._button, 'click', L.DomEvent.preventDefault)
-                .on(this._button, 'click', this.toggle, this);
-
-            this._marker = null;
-            this._circle = null;
-            this._watchId = null;
-            this._active = false;
-
-            return this._container;
-        },
-
-        toggle: function() {
-            if (this._active) {
-                this._stop();
-            } else {
-                this._start();
-            }
-            return this;
-        },
-
-        _start: function() {
-            if (!navigator.geolocation) {
-                alert("Geolocalização não é suportada pelo seu navegador.");
-                return;
-            }
-
-            this._active = true;
-            L.DomUtil.addClass(this._container, 'active');
-            this._button.title = 'Desativar GPS';
-
-            var options = {
-                enableHighAccuracy: true,
-                maximumAge: 10000,
-                timeout: 15000
-            };
-
-            this._watchId = navigator.geolocation.watchPosition(
-                this._updatePosition.bind(this),
-                this._error.bind(this),
-                options
-            );
-        },
-
-        _stop: function() {
-            this._active = false;
-            L.DomUtil.removeClass(this._container, 'active');
-            this._button.title = 'Ativar GPS';
-
-            if (this._watchId !== null) {
-                navigator.geolocation.clearWatch(this._watchId);
-                this._watchId = null;
-            }
-
-            if (this._marker) {
-                this._map.removeLayer(this._marker);
-                this._marker = null;
-            }
-
-            if (this._circle) {
-                this._map.removeLayer(this._circle);
-                this._circle = null;
-            }
-        },
-
-        _updatePosition: function(pos) {
-            var latlng = L.latLng(pos.coords.latitude, pos.coords.longitude);
-            var accuracy = pos.coords.accuracy;
-
-            if (this._marker) {
-                this._map.removeLayer(this._marker);
-            }
-            if (this._circle) {
-                this._map.removeLayer(this._circle);
-            }
-
-            this._circle = L.circle(latlng, {
-                radius: accuracy,
-                color: '#136AEC',
-                fillColor: '#136AEC',
-                fillOpacity: 0.15,
-                weight: 1
-            }).addTo(this._map);
-
-            this._marker = L.marker(latlng, {
-                icon: L.divIcon({
-                    className: 'gps-marker',
-                    iconSize: [12, 12]
-                })
-            }).addTo(this._map);
-
-            this._marker.bindPopup(
-                `Sua posição:<br>
-                Lat: ${latlng.lat.toFixed(6)}<br>
-                Lng: ${latlng.lng.toFixed(6)}<br>
-                Precisão: ~${Math.round(accuracy)} metros`
-            ).openPopup();
-
-            this._map.setView(latlng, 18);
-        },
-
-        _error: function(err) {
-            var msg;
-            switch(err.code) {
-                case err.PERMISSION_DENIED:
-                    msg = "Permissão para acesso à localização negada";
-                    break;
-                case err.POSITION_UNAVAILABLE:
-                    msg = "Localização indisponível";
-                    break;
-                case err.TIMEOUT:
-                    msg = "Tempo de espera excedido";
-                    break;
-                case err.UNKNOWN_ERROR:
-                    msg = "Erro desconhecido";
-                    break;
-            }
-            alert("Erro de GPS: " + msg);
-            this._stop();
-        }
-    });
-
-    L.control.gps = function(options) {
-        return new L.Control.GPS(options);
-    };
-
-    // ===== MAPA PRINCIPAL =====
     var map = L.map('map', {
-        zoomControl: false,
-        maxZoom: 28,
-        minZoom: 1
+        zoomControl:false, maxZoom:28, minZoom:1
     }).fitBounds([[-27.639171744342082,-48.73839171825091],[-27.518259322046152,-48.52972728648032]]);
-
-    // Adiciona controle de GPS
-    var gpsControl = L.control.gps({position: 'topleft'}).addTo(map);
-
     var hash = new L.Hash(map);
-    map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+    map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a>');
     var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
-
-    // Funções originais do seu mapa
     function removeEmptyRowsFromPopupContent(content, feature) {
         var tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
@@ -244,41 +80,25 @@
         }
         return tempDiv.innerHTML;
     }
-
     function addClassToPopupIfMedia(content, popup) {
         var tempDiv = document.createElement('div');
         tempDiv.innerHTML = content;
         if (tempDiv.querySelector('td img')) {
             popup._contentNode.classList.add('media');
-            setTimeout(function() {
-                popup.update();
-            }, 10);
+            setTimeout(function() { popup.update(); }, 10);
         } else {
             popup._contentNode.classList.remove('media');
         }
     }
-
-    var zoomControl = L.control.zoom({
-        position: 'topleft'
-    }).addTo(map);
-
+    var zoomControl = L.control.zoom({ position: 'topleft' }).addTo(map);
     var bounds_group = new L.featureGroup([]);
     function setBounds() {}
-
-    // Camadas originais do seu mapa
     function pop_mascara_0(feature, layer) {
-        var popupContent = '<table>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-            </table>';
+        var popupContent = '<table><tr><td colspan="2">' + (feature.properties['id'] !== null ? autolinker.link(String(feature.properties['id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr></table>';
         var content = removeEmptyRowsFromPopupContent(popupContent, feature);
-        layer.on('popupopen', function(e) {
-            addClassToPopupIfMedia(content, e.popup);
-        });
+        layer.on('popupopen', function(e) { addClassToPopupIfMedia(content, e.popup); });
         layer.bindPopup(content, { maxHeight: 400 });
     }
-
     function style_mascara_0_0() {
         return {
             pane: 'pane_mascara_0',
@@ -287,14 +107,13 @@
             dashArray: '',
             lineCap: 'butt',
             lineJoin: 'miter',
-            weight: 1.0, 
+            weight: 1.0,
             fill: true,
             fillOpacity: 1,
             fillColor: 'rgba(247,252,245,1.0)',
             interactive: false,
         }
     }
-
     map.createPane('pane_mascara_0');
     map.getPane('pane_mascara_0').style.zIndex = 400;
     map.getPane('pane_mascara_0').style['mix-blend-mode'] = 'normal';
@@ -309,7 +128,6 @@
     });
     bounds_group.addLayer(layer_mascara_0);
     map.addLayer(layer_mascara_0);
-
     map.createPane('pane_OSMStandard_1');
     map.getPane('pane_OSMStandard_1').style.zIndex = 401;
     var layer_OSMStandard_1 = L.tileLayer('http://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -322,59 +140,27 @@
         maxNativeZoom: 19
     });
     map.addLayer(layer_OSMStandard_1);
-
     function pop_SC_sao_jose_2023_2(feature, layer) {
-        var popupContent = '<table>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_MUN'] !== null ? autolinker.link(String(feature.properties['CD_MUN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_MUN'] !== null ? autolinker.link(String(feature.properties['NM_MUN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_RGI'] !== null ? autolinker.link(String(feature.properties['CD_RGI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_RGI'] !== null ? autolinker.link(String(feature.properties['NM_RGI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_RGINT'] !== null ? autolinker.link(String(feature.properties['CD_RGINT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_RGINT'] !== null ? autolinker.link(String(feature.properties['NM_RGINT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_UF'] !== null ? autolinker.link(String(feature.properties['CD_UF']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_UF'] !== null ? autolinker.link(String(feature.properties['NM_UF']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_REGIAO'] !== null ? autolinker.link(String(feature.properties['CD_REGIAO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_REGIAO'] !== null ? autolinker.link(String(feature.properties['NM_REGIAO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_CONCURB'] !== null ? autolinker.link(String(feature.properties['CD_CONCURB']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_CONCURB'] !== null ? autolinker.link(String(feature.properties['NM_CONCURB']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['AREA_KM2'] !== null ? autolinker.link(String(feature.properties['AREA_KM2']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-            </table>';
+        var popupContent = '<table>' +
+            '<tr><td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_MUN'] !== null ? autolinker.link(String(feature.properties['CD_MUN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_MUN'] !== null ? autolinker.link(String(feature.properties['NM_MUN']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_RGI'] !== null ? autolinker.link(String(feature.properties['CD_RGI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_RGI'] !== null ? autolinker.link(String(feature.properties['NM_RGI']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_RGINT'] !== null ? autolinker.link(String(feature.properties['CD_RGINT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_RGINT'] !== null ? autolinker.link(String(feature.properties['NM_RGINT']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_UF'] !== null ? autolinker.link(String(feature.properties['CD_UF']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_UF'] !== null ? autolinker.link(String(feature.properties['NM_UF']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_REGIAO'] !== null ? autolinker.link(String(feature.properties['CD_REGIAO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_REGIAO'] !== null ? autolinker.link(String(feature.properties['NM_REGIAO']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_CONCURB'] !== null ? autolinker.link(String(feature.properties['CD_CONCURB']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_CONCURB'] !== null ? autolinker.link(String(feature.properties['NM_CONCURB']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['AREA_KM2'] !== null ? autolinker.link(String(feature.properties['AREA_KM2']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '</table>';
         var content = removeEmptyRowsFromPopupContent(popupContent, feature);
-        layer.on('popupopen', function(e) {
-            addClassToPopupIfMedia(content, e.popup);
-        });
+        layer.on('popupopen', function(e) { addClassToPopupIfMedia(content, e.popup); });
         layer.bindPopup(content, { maxHeight: 400 });
     }
-
     function style_SC_sao_jose_2023_2_0() {
         return {
             pane: 'pane_SC_sao_jose_2023_2',
@@ -388,7 +174,6 @@
             interactive: false,
         }
     }
-
     map.createPane('pane_SC_sao_jose_2023_2');
     map.getPane('pane_SC_sao_jose_2023_2').style.zIndex = 402;
     map.getPane('pane_SC_sao_jose_2023_2').style['mix-blend-mode'] = 'normal';
@@ -403,77 +188,33 @@
     });
     bounds_group.addLayer(layer_SC_sao_jose_2023_2);
     map.addLayer(layer_SC_sao_jose_2023_2);
-
     function pop_faces_debora_3(feature, layer) {
-        var popupContent = '<table>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_SETOR'] !== null ? autolinker.link(String(feature.properties['CD_SETOR']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_QUADRA'] !== null ? autolinker.link(String(feature.properties['CD_QUADRA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['CD_FACE'] !== null ? autolinker.link(String(feature.properties['CD_FACE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_TIP_LOG'] !== null ? autolinker.link(String(feature.properties['NM_TIP_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_TIT_LOG'] !== null ? autolinker.link(String(feature.properties['NM_TIT_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['NM_LOG'] !== null ? autolinker.link(String(feature.properties['NM_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['TOT_RES'] !== null ? autolinker.link(String(feature.properties['TOT_RES']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['TOT_GERAL'] !== null ? autolinker.link(String(feature.properties['TOT_GERAL']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Codigo_IBG'] !== null ? autolinker.link(String(feature.properties['Codigo_IBG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <th scope="row">Id</th>\
-                    <td>' + (feature.properties['Id'] !== null ? autolinker.link(String(feature.properties['Id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Endereco'] !== null ? autolinker.link(String(feature.properties['Endereco']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Zona_BigDa'] !== null ? autolinker.link(String(feature.properties['Zona_BigDa']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Macrozona'] !== null ? autolinker.link(String(feature.properties['Macrozona']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Bairro'] !== null ? autolinker.link(String(feature.properties['Bairro']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Pesquisado'] !== null ? autolinker.link(String(feature.properties['Pesquisado']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Qtd_entr'] !== null ? autolinker.link(String(feature.properties['Qtd_entr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-                <tr>\
-                    <td colspan="2">' + (feature.properties['Selecao'] !== null ? autolinker.link(String(feature.properties['Selecao']).replace(/'/g, '\'').toLocaleString()) : '') + '</td>\
-                </tr>\
-            </table>';
+        var popupContent = '<table>' +
+            '<tr><td colspan="2">' + (feature.properties['fid'] !== null ? autolinker.link(String(feature.properties['fid']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_SETOR'] !== null ? autolinker.link(String(feature.properties['CD_SETOR']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_QUADRA'] !== null ? autolinker.link(String(feature.properties['CD_QUADRA']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['CD_FACE'] !== null ? autolinker.link(String(feature.properties['CD_FACE']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_TIP_LOG'] !== null ? autolinker.link(String(feature.properties['NM_TIP_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_TIT_LOG'] !== null ? autolinker.link(String(feature.properties['NM_TIT_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['NM_LOG'] !== null ? autolinker.link(String(feature.properties['NM_LOG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['TOT_RES'] !== null ? autolinker.link(String(feature.properties['TOT_RES']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['TOT_GERAL'] !== null ? autolinker.link(String(feature.properties['TOT_GERAL']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Codigo_IBG'] !== null ? autolinker.link(String(feature.properties['Codigo_IBG']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><th scope="row">Id</th><td>' + (feature.properties['Id'] !== null ? autolinker.link(String(feature.properties['Id']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Endereco'] !== null ? autolinker.link(String(feature.properties['Endereco']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Zona_BigDa'] !== null ? autolinker.link(String(feature.properties['Zona_BigDa']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Macrozona'] !== null ? autolinker.link(String(feature.properties['Macrozona']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Bairro'] !== null ? autolinker.link(String(feature.properties['Bairro']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Pesquisado'] !== null ? autolinker.link(String(feature.properties['Pesquisado']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Qtd_entr'] !== null ? autolinker.link(String(feature.properties['Qtd_entr']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '<tr><td colspan="2">' + (feature.properties['Selecao'] !== null ? autolinker.link(String(feature.properties['Selecao']).replace(/'/g, '\'').toLocaleString()) : '') + '</td></tr>' +
+            '</table>';
         var content = removeEmptyRowsFromPopupContent(popupContent, feature);
-        layer.on('popupopen', function(e) {
-            addClassToPopupIfMedia(content, e.popup);
-        });
+        layer.on('popupopen', function(e) { addClassToPopupIfMedia(content, e.popup); });
         layer.bindPopup(content, { maxHeight: 400 });
     }
-
     function style_faces_debora_3_0(feature) {
-        var context = {
-            feature: feature,
-            variables: {}
-        };
+        var context = { feature: feature, variables: {} };
         if (exp_faces_debora_3rule0_eval_expression(context)) {
             return {
                 pane: 'pane_faces_debora_3',
@@ -511,10 +252,9 @@
                 interactive: false,
             };
         } else {
-            return {fill: false, stroke: false};
+            return { fill: false, stroke: false };
         }
     }
-
     map.createPane('pane_faces_debora_3');
     map.getPane('pane_faces_debora_3').style.zIndex = 403;
     map.getPane('pane_faces_debora_3').style['mix-blend-mode'] = 'normal';
@@ -530,31 +270,108 @@
     bounds_group.addLayer(layer_faces_debora_3);
     map.addLayer(layer_faces_debora_3);
     setBounds();
-
     var i = 0;
     layer_faces_debora_3.eachLayer(function(layer) {
-        var context = {
-            feature: layer.feature,
-            variables: {}
-        };
-        layer.bindTooltip((layer.feature.properties['Id'] !== null?String('<div style="color: #f82754; font-size: 7pt; font-family: \'Arial Black\', sans-serif;">' + layer.feature.properties['Id']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_faces_debora_3'});
+        var context = { feature: layer.feature, variables: {} };
+        layer.bindTooltip((layer.feature.properties['Id'] !== null ? String('<div style="color: #f82754; font-size: 7pt; font-family: \'Arial Black\', sans-serif;">' + layer.feature.properties['Id'] + '</div>') : ''),
+            { permanent: true, offset: [-0, -16], className: 'css_faces_debora_3' });
         labels.push(layer);
         totalMarkers += 1;
         layer.added = true;
         addLabel(layer, i);
         i++;
     });
-
     resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]);
-    map.on("zoomend", function(){
-        resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]);
+    map.on("zoomend", function(){ resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]); });
+    map.on("layeradd", function(){ resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]); });
+    map.on("layerremove", function(){ resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]); });
+
+    // --- GPS TRACKER PADRÃO ---
+    var gpsActive = false;
+    var gpsMarker = null;
+    var gpsCircle = null;
+    var gpsWatchId = null;
+
+    document.getElementById('gpsBtn').addEventListener('click', function() {
+        if (!gpsActive) {
+            if (!navigator.geolocation) {
+                alert('Geolocalização não suportada pelo seu navegador.');
+                return;
+            }
+            this.classList.add('active');
+            this.innerHTML = '<i class="fas fa-location-arrow"></i> GPS ON';
+            gpsActive = true;
+            gpsWatchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+                enableHighAccuracy: true,
+                maximumAge: 10000,
+                timeout: 20000
+            });
+        } else {
+            this.classList.remove('active');
+            this.innerHTML = '<i class="fas fa-location-arrow"></i> GPS';
+            gpsActive = false;
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+            if (gpsMarker) {
+                map.removeLayer(gpsMarker);
+                gpsMarker = null;
+            }
+            if (gpsCircle) {
+                map.removeLayer(gpsCircle);
+                gpsCircle = null;
+            }
+        }
     });
-    map.on("layeradd", function(){
-        resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]);
-    });
-    map.on("layerremove", function(){
-        resetLabels([layer_SC_sao_jose_2023_2,layer_faces_debora_3]);
-    });
+
+    function onGPSSuccess(position) {
+        var lat = position.coords.latitude;
+        var lng = position.coords.longitude;
+        var acc = position.coords.accuracy;
+
+        if (gpsMarker) map.removeLayer(gpsMarker);
+        if (gpsCircle) map.removeLayer(gpsCircle);
+
+        gpsMarker = L.marker([lat, lng], {
+            icon: L.icon({
+                iconUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34]
+            })
+        }).addTo(map).bindPopup('Você está aqui').openPopup();
+
+        gpsCircle = L.circle([lat, lng], {
+            radius: acc,
+            color: '#136AEC',
+            fillColor: '#136AEC',
+            fillOpacity: 0.15,
+            weight: 2
+        }).addTo(map);
+
+        map.setView([lat, lng], 18);
+    }
+
+    function onGPSError(error) {
+        alert('Erro ao obter localização: ' + error.message + '\nDica: ative a localização do navegador e use HTTPS.');
+        document.getElementById('gpsBtn').classList.remove('active');
+        document.getElementById('gpsBtn').innerHTML = '<i class="fas fa-location-arrow"></i> GPS';
+        gpsActive = false;
+        if (gpsWatchId !== null) {
+            navigator.geolocation.clearWatch(gpsWatchId);
+            gpsWatchId = null;
+        }
+        if (gpsMarker) {
+            map.removeLayer(gpsMarker);
+            gpsMarker = null;
+        }
+        if (gpsCircle) {
+            map.removeLayer(gpsCircle);
+            gpsCircle = null;
+        }
+    }
+    // --- FIM GPS TRACKER ---
     </script>
 </body>
 </html>
