@@ -17,12 +17,36 @@
             padding: 0;
             margin: 0;
         }
+        /* Estilo para o botão de GPS */
+        .gps-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #888;
+            border-radius: 4px;
+            padding: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .gps-button.active {
+            background: #4caf50;
+            color: white;
+        }
         </style>
         <title></title>
     </head>
     <body>
-        <div id="map">
-        </div>
+        <div id="map"></div>
+        <!-- Botão para ativar GPS -->
+        <button id="gpsBtn" class="gps-button" title="Ativar/Desativar localização">
+            <i class="fas fa-location-arrow"></i> GPS
+        </button>
         <script src="js/qgis2web_expressions.js"></script>
         <script src="js/leaflet.js"></script>
         <script src="js/L.Control.Layers.Tree.min.js"></script>
@@ -33,6 +57,7 @@
         <script src="js/rbush.min.js"></script>
         <script src="js/labelgun.min.js"></script>
         <script src="js/labels.js"></script>
+        <script src="js/fontawesome-all.min.js"></script>
         <script src="data/mascara_0.js"></script>
         <script src="data/SC_sao_jose_2023_2.js"></script>
         <script src="data/faces_iohanna_3.js"></script>
@@ -41,7 +66,7 @@
             zoomControl:false, maxZoom:28, minZoom:1
         }).fitBounds([[-27.639171744342082,-48.73839171825091],[-27.518259322046152,-48.52972728648032]]);
         var hash = new L.Hash(map);
-        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
+        map.attributionControl.setPrefix('<a href="https://github.com/tomchadwin/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a>');
         var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
         // remove popup's row if "visible-with-data"
         function removeEmptyRowsFromPopupContent(content, feature) {
@@ -130,7 +155,6 @@
             minNativeZoom: 0,
             maxNativeZoom: 19
         });
-        layer_OSMStandard_1;
         map.addLayer(layer_OSMStandard_1);
         function pop_SC_sao_jose_2023_2(feature, layer) {
             var popupContent = '<table>\
@@ -345,12 +369,13 @@
                 feature: layer.feature,
                 variables: {}
             };
-            layer.bindTooltip((layer.feature.properties['Id'] !== null?String('<div style="color: #f82754; font-size: 7pt; font-family: \'Arial Black\', sans-serif;">' + layer.feature.properties['Id']) + '</div>':''), {permanent: true, offset: [-0, -16], className: 'css_faces_iohanna_3'});
+            layer.bindTooltip((layer.feature.properties['Id'] !== null?String('<div style="color: #f82754; font-size: 7pt; font-family: \'Arial Black\', sans-serif;">' + layer.feature.properties['Id'] + '</div>'):'')
+            , {permanent: true, offset: [-0, -16], className: 'css_faces_iohanna_3'});
             labels.push(layer);
             totalMarkers += 1;
-              layer.added = true;
-              addLabel(layer, i);
-              i++;
+            layer.added = true;
+            addLabel(layer, i);
+            i++;
         });
         resetLabels([layer_SC_sao_jose_2023_2,layer_faces_iohanna_3]);
         map.on("zoomend", function(){
@@ -362,6 +387,91 @@
         map.on("layerremove", function(){
             resetLabels([layer_SC_sao_jose_2023_2,layer_faces_iohanna_3]);
         });
+
+        // --- GPS TRACKER ---
+        var gpsActive = false;
+        var gpsMarker = null;
+        var gpsCircle = null;
+        var gpsWatchId = null;
+
+        var gpsBtn = document.getElementById('gpsBtn');
+        gpsBtn.addEventListener('click', function() {
+            if (!gpsActive) {
+                startGPS();
+            } else {
+                stopGPS();
+            }
+        });
+
+        function startGPS() {
+            if (!navigator.geolocation) {
+                alert('Geolocalização não suportada.');
+                return;
+            }
+            gpsBtn.classList.add('active');
+            gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> GPS ON';
+            gpsActive = true;
+            gpsWatchId = navigator.geolocation.watchPosition(onGPSSuccess, onGPSError, {
+                enableHighAccuracy: true,
+                maximumAge: 10000,
+                timeout: 20000
+            });
+        }
+
+        function stopGPS() {
+            gpsBtn.classList.remove('active');
+            gpsBtn.innerHTML = '<i class="fas fa-location-arrow"></i> GPS';
+            gpsActive = false;
+            if (gpsWatchId !== null) {
+                navigator.geolocation.clearWatch(gpsWatchId);
+                gpsWatchId = null;
+            }
+            if (gpsMarker) {
+                map.removeLayer(gpsMarker);
+                gpsMarker = null;
+            }
+            if (gpsCircle) {
+                map.removeLayer(gpsCircle);
+                gpsCircle = null;
+            }
+        }
+
+        function onGPSSuccess(position) {
+            var lat = position.coords.latitude;
+            var lng = position.coords.longitude;
+            var acc = position.coords.accuracy;
+
+            // Remove marcador anterior, se existir
+            if (gpsMarker) map.removeLayer(gpsMarker);
+            if (gpsCircle) map.removeLayer(gpsCircle);
+
+            gpsMarker = L.marker([lat, lng], {
+                icon: L.icon({
+                    iconUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
+                    iconSize: [25, 41],
+                    iconAnchor: [12, 41],
+                    popupAnchor: [1, -34]
+                })
+            }).addTo(map).bindPopup('Você está aqui');
+
+            gpsCircle = L.circle([lat, lng], {
+                radius: acc,
+                color: '#136AEC',
+                fillColor: '#136AEC',
+                fillOpacity: 0.15,
+                weight: 2
+            }).addTo(map);
+
+            // Centraliza o mapa na posição do usuário
+            map.setView([lat, lng], 18);
+        }
+
+        function onGPSError(error) {
+            alert('Erro ao obter localização: ' + error.message);
+            stopGPS();
+        }
+        // --- FIM GPS TRACKER ---
+
         </script>
     </body>
 </html>
