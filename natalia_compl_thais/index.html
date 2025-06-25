@@ -17,12 +17,27 @@
             padding: 0;
             margin: 0;
         }
+        .leaflet-control-gpslocate {
+            background: #fff;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.65);
+            width: 36px;
+            height: 36px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .leaflet-control-gpslocate i {
+            font-size: 20px;
+            color: #0078A8;
+        }
         </style>
         <title></title>
     </head>
     <body>
-        <div id="map">
-        </div>
+        <div id="map"></div>
         <script src="js/qgis2web_expressions.js"></script>
         <script src="js/leaflet.js"></script>
         <script src="js/L.Control.Layers.Tree.min.js"></script>
@@ -362,6 +377,106 @@
         map.on("layerremove", function(){
             resetLabels([layer_SC_sao_jose_2023_2,layer_faces_natalia_compl_thais_3]);
         });
+
+        // =========================
+        // GPS TRACKING BUTTON BELOW
+        // =========================
+
+        // Create a custom Leaflet control for GPS location
+        var gpsControl = L.Control.extend({
+            options: {
+                position: 'topleft'
+            },
+            onAdd: function (map) {
+                var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control-gpslocate');
+                container.title = "Localizar minha posição";
+                container.innerHTML = '<i class="fas fa-crosshairs"></i>';
+                container.onclick = function (e) {
+                    e = e || window.event;
+                    e.stopPropagation();
+                    e.preventDefault();
+                    locateUser();
+                };
+                // Prevent map dragging when clicking the button
+                L.DomEvent.disableClickPropagation(container);
+                return container;
+            }
+        });
+        map.addControl(new gpsControl());
+
+        var userMarker = null;
+        var userCircle = null;
+        var watchId = null;
+
+        function locateUser() {
+            if (!navigator.geolocation) {
+                alert('Geolocalização não é suportada por seu navegador.');
+                return;
+            }
+
+            if (userMarker) {
+                map.removeLayer(userMarker);
+                userMarker = null;
+            }
+            if (userCircle) {
+                map.removeLayer(userCircle);
+                userCircle = null;
+            }
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+
+            // Watch position for continuous tracking
+            watchId = navigator.geolocation.watchPosition(
+                function (position) {
+                    var lat = position.coords.latitude;
+                    var lng = position.coords.longitude;
+                    var accuracy = position.coords.accuracy;
+
+                    if (userMarker) {
+                        userMarker.setLatLng([lat, lng]);
+                    } else {
+                        userMarker = L.marker([lat, lng], {
+                            icon: L.icon({
+                                iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+                                iconSize: [25, 41],
+                                iconAnchor: [12, 41],
+                                popupAnchor: [1, -34],
+                            }),
+                            title: 'Sua localização'
+                        }).addTo(map);
+                        userMarker.bindPopup("Você está aqui!").openPopup();
+                    }
+
+                    if (userCircle) {
+                        userCircle.setLatLng([lat, lng]);
+                        userCircle.setRadius(accuracy);
+                    } else {
+                        userCircle = L.circle([lat, lng], {
+                            radius: accuracy,
+                            color: '#136AEC',
+                            fillColor: '#136AEC',
+                            fillOpacity: 0.15,
+                            weight: 2
+                        }).addTo(map);
+                    }
+
+                    map.setView([lat, lng], 18);
+                },
+                function (err) {
+                    alert('Erro ao obter localização: ' + err.message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    maximumAge: 10000,
+                    timeout: 20000
+                }
+            );
+        }
+        // =========================
+        // END GPS TRACKING BUTTON
+        // =========================
         </script>
     </body>
 </html>
